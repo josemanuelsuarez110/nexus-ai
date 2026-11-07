@@ -27,10 +27,10 @@ export default function LoginPage() {
     }
   };
 
-  const handleShieldLogin = async () => {
+  const handleGitHubLogin = async () => {
     await supabase.auth.signInWithOAuth({
-      provider: 'FolderGit2',
-      options: { redirectTo: \\/auth/callback\ },
+      provider: 'github',
+      options: { redirectTo: ${window.location.origin}/auth/callback },
     });
   };
 
@@ -99,10 +99,10 @@ export default function LoginPage() {
         </div>
 
         <button
-          onClick={handleShieldLogin}
+          onClick={handleGitHubLogin}
           className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center space-x-2 border border-slate-700"
         >
-          <span>Sign in with FolderGit2</span>
+          <span>Sign in with GitHub</span>
         </button>
       </div>
     </div>
