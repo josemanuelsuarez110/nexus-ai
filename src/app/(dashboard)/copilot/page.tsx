@@ -1,240 +1,169 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
-import {
-  Bot,
-  Send,
-  Sparkles,
-  Terminal,
-  Copy,
-  Check,
-  Code2,
-  RefreshCw,
-  Lightbulb,
-  Cpu,
-} from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Bot, Send, User, Sparkles, RefreshCw } from 'lucide-react';
 
-interface ChatMessage {
+interface Message {
   id: string;
-  sender: 'user' | 'copilot';
+  role: 'user' | 'assistant';
   content: string;
-  codeSnippet?: string;
   timestamp: string;
 }
 
 export default function CopilotPage() {
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [inputPrompt, setInputPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5');
-
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      sender: 'copilot',
-      content:
-        'Hello! I am your Nexus Copilot. I can inspect your repositories, generate test suites, audit security vulnerabilities, or write full Next.js components. How can I help you today?',
-      timestamp: '10:02 AM',
-    },
-    {
-      id: '2',
-      sender: 'user',
-      content: 'Can you show me an example of an asynchronous Supabase server query with proper error handling?',
-      timestamp: '10:04 AM',
-    },
-    {
-      id: '3',
-      sender: 'copilot',
-      content:
-        'Here is a robust pattern for querying Supabase in Next.js Server Components with proper TypeScript typings and error handling:',
-      codeSnippet: `import { createClient } from '@/lib/supabase/server';
-
-export async function fetchProjectMetrics(projectId: string) {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from('telemetry_events')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  if (error) {
-    console.error('Failed to query telemetry events:', error.message);
-    throw new Error(\`Database error: \${error.message}\`);
-  }
-
-  return data ?? [];
-}`,
-      timestamp: '10:04 AM',
+      role: 'assistant',
+      content: '¡Hola! Soy **Nexus Copilot**. ¿En qué puedo ayudarte hoy con la arquitectura, la seguridad o la calidad de tu código?',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!inputPrompt.trim()) return;
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]);
 
-    const userMsg: ChatMessage = {
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || loading) return;
+
+    const userMsg: Message = {
       id: Date.now().toString(),
-      sender: 'user',
-      content: inputPrompt,
+      role: 'user',
+      content: input,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    setInputPrompt('');
+    const currentInput = input;
+    setInput('');
+    setLoading(true);
 
-    // Simulated copilot reaction
-    setTimeout(() => {
-      const botMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'copilot',
-        content: `I analyzed your request using ${selectedModel.toUpperCase()}. I have verified your codebase context and can run this automated task for you.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, botMsg]);
-    }, 600);
+    try {
+      const res = await fetch('/api/copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: currentInput }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: data.content,
+            timestamp: new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+      } else {
+        throw new Error(data.error || 'Error al obtener respuesta');
+      }
+    } catch (err: any) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: '❌ Ocurrió un error al procesar tu solicitud. Inténtalo de nuevo.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const promptSuggestions = [
-    'Generate unit tests for sidebar.tsx',
-    'Audit dependencies for CVE vulnerabilities',
-    'Write Supabase RLS policy for user data',
-    'Refactor metric-card to support animations',
-  ];
-
   return (
-    <div className="flex flex-col h-[calc(100vh-8.5rem)] space-y-4">
-      {/* Copilot Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+    <div className="flex h-[calc(100vh-8rem)] flex-col rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Header del Chat */}
+      <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-900">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-md shadow-indigo-500/20">
-            <Bot className="h-5 w-5" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+            <Sparkles className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-              Nexus AI Copilot
-              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                Online
-              </span>
-            </h1>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Nexus Copilot Assistant
+            </h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Autonomous engineering assistant with repo-level context.
+              DevSecOps Intelligence & Automated Code Analysis
             </p>
           </div>
         </div>
-
-        {/* Model Selector */}
-        <div className="flex items-center gap-2">
-          <Cpu className="h-4 w-4 text-zinc-400" />
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            <option value="gemini-2.5">Gemini 2.5 Flash (Google)</option>
-            <option value="gpt-4o">GPT-4o (OpenAI)</option>
-            <option value="claude-3-5">Claude 3.5 Sonnet (Anthropic)</option>
-          </select>
-        </div>
       </div>
 
-      {/* Chat Messages Container */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+      {/* Área de Mensajes */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex items-start gap-3 ${
+              msg.role === 'user' ? 'flex-row-reverse' : ''
+            }`}
           >
-            {msg.sender === 'copilot' && (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                <Sparkles className="h-4 w-4" />
-              </div>
-            )}
-
             <div
-              className={`max-w-2xl rounded-2xl px-4 py-3 text-xs leading-relaxed ${
-                msg.sender === 'user'
-                  ? 'bg-indigo-600 text-white'
-                  : 'border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 shadow-sm'
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-semibold ${
+                msg.role === 'user'
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  : 'bg-indigo-600 text-white'
               }`}
             >
-              <div className="flex items-center justify-between gap-4 mb-1 text-[10px] text-zinc-400">
-                <span className="font-semibold">
-                  {msg.sender === 'user' ? 'You' : 'Nexus Copilot'}
-                </span>
-                <span>{msg.timestamp}</span>
-              </div>
-
-              <p className="whitespace-pre-wrap">{msg.content}</p>
-
-              {msg.codeSnippet && (
-                <div className="mt-3 relative rounded-xl border border-zinc-200 bg-zinc-900 p-3 font-mono text-[11px] text-zinc-100 dark:border-zinc-800">
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-800 text-[10px] text-zinc-400">
-                    <span className="flex items-center gap-1">
-                      <Code2 className="h-3 w-3" /> TypeScript
-                    </span>
-                    <button
-                      onClick={() => handleCopy(msg.id, msg.codeSnippet!)}
-                      className="inline-flex items-center gap-1 hover:text-white transition-colors"
-                    >
-                      {copiedId === msg.id ? (
-                        <>
-                          <Check className="h-3 w-3 text-emerald-400" />
-                          <span className="text-emerald-400">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3 w-3" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <pre className="overflow-x-auto">{msg.codeSnippet}</pre>
-                </div>
-              )}
+              {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+            </div>
+            <div
+              className={`max-w-[75%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                msg.role === 'user'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200'
+              }`}
+            >
+              <div className="whitespace-pre-wrap">{msg.content}</div>
+              <span className="mt-1 block text-[10px] opacity-60 text-right">
+                {msg.timestamp}
+              </span>
             </div>
           </div>
         ))}
+
+        {loading && (
+          <div className="flex items-center gap-2 text-xs text-zinc-400 italic">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            <span>Nexus Copilot está analizando tu consulta...</span>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Prompts */}
-      <div className="flex flex-wrap gap-2 pt-2">
-        {promptSuggestions.map((prompt) => (
+      {/* Input de Mensaje */}
+      <form onSubmit={handleSend} className="border-t border-zinc-100 p-4 dark:border-zinc-900">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Haz una pregunta sobre el código, seguridad o métricas..."
+            className="flex-1 rounded-xl border border-zinc-200 bg-white py-2.5 px-4 text-xs text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+          />
           <button
-            key={prompt}
-            onClick={() => setInputPrompt(prompt)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 transition-colors"
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 transition-colors"
           >
-            <Lightbulb className="h-3 w-3 text-amber-500" />
-            <span>{prompt}</span>
+            <span>Enviar</span>
+            <Send className="h-3.5 w-3.5" />
           </button>
-        ))}
-      </div>
-
-      {/* Input Bar */}
-      <form onSubmit={handleSendMessage} className="relative">
-        <input
-          type="text"
-          placeholder="Ask Copilot to generate code, audit security, or explain bugs..."
-          value={inputPrompt}
-          onChange={(e) => setInputPrompt(e.target.value)}
-          className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-4 pr-12 text-xs text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 shadow-sm"
-        />
-        <button
-          type="submit"
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
-          disabled={!inputPrompt.trim()}
-          aria-label="Send message"
-        >
-          <Send className="h-3.5 w-3.5" />
-        </button>
+        </div>
       </form>
     </div>
   );
