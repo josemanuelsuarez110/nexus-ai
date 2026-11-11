@@ -1,8 +1,9 @@
 ﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard,
   FolderGit2,
@@ -13,7 +14,6 @@ import {
   ChevronRight,
   LogOut,
   Sparkles,
-  Settings,
 } from 'lucide-react';
 
 interface NavItem {
@@ -29,7 +29,6 @@ const navItems: NavItem[] = [
   { label: 'Quality', href: '/quality', icon: Gauge },
   { label: 'Security', href: '/security', icon: ShieldCheck },
   { label: 'Copilot', href: '/copilot', icon: Bot, badge: 'AI' },
-  { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
 interface SidebarProps {
@@ -43,6 +42,28 @@ interface SidebarProps {
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
+  const handleSignOut = async () => {
+    setLogoutError(null);
+    try {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error('Failed to sign out', error);
+        setLogoutError('No se pudo cerrar la sesión.');
+        return;
+      }
+
+      router.replace('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to sign out', error);
+      setLogoutError('No se pudo cerrar la sesión.');
+    }
+  };
 
   return (
     <aside
@@ -130,34 +151,33 @@ export function Sidebar({ user }: SidebarProps) {
           }`}
         >
           <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center font-medium text-xs text-zinc-700 dark:text-zinc-300">
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={user.name || 'User'} className="h-full w-full object-cover" />
-            ) : (
-              <span>{user?.name ? user.name.slice(0, 2).toUpperCase() : 'JD'}</span>
-            )}
-            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-950" />
+            <span>{user?.email?.slice(0, 2).toUpperCase() || 'NX'}</span>
           </div>
 
           {!collapsed && (
             <div className="flex flex-1 flex-col overflow-hidden text-left">
               <span className="truncate text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                {user?.name || 'Nexus Developer'}
-              </span>
-              <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                {user?.email || 'dev@nexus-ai.local'}
+                {user?.email || 'Cuenta'}
               </span>
             </div>
           )}
 
           {!collapsed && (
             <button
+              onClick={handleSignOut}
               className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
               title="Sign out"
+              aria-label="Cerrar sesión"
             >
               <LogOut className="h-4 w-4" />
             </button>
           )}
         </div>
+        {logoutError && (
+          <p role="alert" className="px-2 pt-2 text-xs text-red-600 dark:text-red-400">
+            {logoutError}
+          </p>
+        )}
       </div>
     </aside>
   );
