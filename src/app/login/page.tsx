@@ -1,9 +1,25 @@
 ﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Shield, Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+function getSafeNextPath() {
+  const requestedNext = new URLSearchParams(window.location.search).get('next');
+  if (!requestedNext) return '/dashboard';
+
+  try {
+    const destination = new URL(requestedNext, window.location.origin);
+    if (destination.origin === window.location.origin) {
+      return `${destination.pathname}${destination.search}${destination.hash}`;
+    }
+  } catch {
+    return '/dashboard';
+  }
+
+  return '/dashboard';
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,27 +27,50 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      router.push(getSafeNextPath());
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'No se pudo iniciar sesión.');
+    } finally {
       setLoading(false);
-    } else {
-      router.push('/dashboard');
     }
   };
 
   const handleGitHubLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: { redirectTo: ${window.location.origin}/auth/callback },
-    });
+    setLoading(true);
+    setError(null);
+
+    try {
+      const callbackUrl = new URL('/auth/callback', window.location.origin);
+      callbackUrl.searchParams.set('next', getSafeNextPath());
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: callbackUrl.toString(),
+        },
+      });
+
+      if (error) {
+        setError(error.message);
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'No se pudo iniciar sesión con GitHub.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -100,9 +139,10 @@ export default function LoginPage() {
 
         <button
           onClick={handleGitHubLogin}
+          disabled={loading}
           className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center space-x-2 border border-slate-700"
         >
-          <span>Sign in with GitHub</span>
+          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>Sign in with GitHub</span>}
         </button>
       </div>
     </div>
