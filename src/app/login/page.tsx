@@ -1,6 +1,6 @@
-﻿'use client';
+'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Shield, Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -27,7 +27,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +34,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setError(error.message);
@@ -54,6 +54,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      const supabase = createClient();
       const callbackUrl = new URL('/auth/callback', window.location.origin);
       callbackUrl.searchParams.set('next', getSafeNextPath());
       const { error } = await supabase.auth.signInWithOAuth({
