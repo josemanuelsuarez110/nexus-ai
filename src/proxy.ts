@@ -7,9 +7,9 @@ export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
-  // Si las variables no están disponibles, dejar pasar sin crear el cliente
+  // Si las variables no están disponibles en el runtime del proxy, dejar pasar sin romper la app
   if (!supabaseUrl || !supabaseKey) {
-    console.error('[proxy] Supabase env vars missing, skipping auth refresh')
+    console.warn('[proxy] Supabase env vars missing in runtime, skipping auth refresh')
     return supabaseResponse
   }
 
@@ -29,6 +29,7 @@ export async function proxy(request: NextRequest) {
       },
     })
 
+    // Refrescar la sesión (usa getUser según la documentación de Supabase)
     await supabase.auth.getUser()
   } catch (error) {
     console.error('[proxy] Supabase auth refresh failed:', error)
